@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';
 import { GoogleGenAI, Modality, Chat, GenerateContentResponse, Type, FunctionDeclaration } from "@google/genai";
 import { 
   Send, 
@@ -54,7 +55,13 @@ const App: React.FC = () => {
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const chatRef = useRef<Chat | null>(null);
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+  const getAI = () => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing GEMINI_API_KEY. Please set it in your environment variables.");
+    }
+    return new GoogleGenAI({ apiKey });
+  };
   
   const systemInstruction = `คุณคือ "AI ผู้เชี่ยวชาญด้านผลิตภัณฑ์ รวมถึงเรื่องอื่นๆ ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย" ที่มีความรู้ลึกซึ้งในหลากหลายมิติ
 - การผลิตและการออกแบบสินค้า
@@ -87,19 +94,25 @@ const App: React.FC = () => {
   };
 
   const initializeChat = (history: Message[] = []) => {
-    const geminiHistory = history.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
-    
-    chatRef.current = ai.chats.create({
-      model: 'gemini-3-flash-preview',
-      history: geminiHistory,
-      config: { 
-        systemInstruction,
-        tools: [{ functionDeclarations: [generateImageTool] }]
-      }
-    });
+    try {
+      const ai = getAI();
+      const geminiHistory = history.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      }));
+      
+      chatRef.current = ai.chats.create({
+        model: 'gemini-3-flash-preview',
+        history: geminiHistory,
+        config: { 
+          systemInstruction,
+          tools: [{ functionDeclarations: [generateImageTool] }]
+        }
+      });
+    } catch (error) {
+      console.error("Failed to initialize chat:", error);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณาตั้งค่า GEMINI_API_KEY ใน Environment Variables ก่อนใช้งานครับ' }]);
+    }
   };
 
   useEffect(() => {
@@ -145,6 +158,7 @@ const App: React.FC = () => {
 
   const performImageGeneration = async (prompt: string, aspectRatio: string = "1:1", attachedImagesData: any[] = []) => {
     try {
+      const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [...attachedImagesData, { text: prompt }] },
@@ -207,7 +221,13 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      if (!chatRef.current) initializeChat(chatHistory);
+      if (!chatRef.current) {
+        initializeChat(chatHistory);
+      }
+      
+      if (!chatRef.current) {
+        throw new Error("Chat could not be initialized. Please check your API key.");
+      }
 
       const imageParts = await Promise.all(
         currentImages
