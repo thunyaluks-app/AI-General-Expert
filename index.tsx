@@ -42,6 +42,8 @@ interface AttachedImage {
 }
 
 const App: React.FC = () => {
+  const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3-flash-preview');
+  const [selectedImageModel, setSelectedImageModel] = useState<string>('gemini-2.5-flash-image');
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState<string>('');
@@ -102,7 +104,7 @@ const App: React.FC = () => {
       }));
       
       chatRef.current = ai.chats.create({
-        model: 'gemini-3-flash-preview',
+        model: selectedTextModel,
         history: geminiHistory,
         config: { 
           systemInstruction,
@@ -116,8 +118,8 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    initializeChat();
-  }, []);
+    initializeChat(chatHistory);
+  }, [selectedTextModel]);
 
   useEffect(() => {
     if (chatHistoryRef.current) {
@@ -160,7 +162,7 @@ const App: React.FC = () => {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: selectedImageModel,
         contents: { parts: [...attachedImagesData, { text: prompt }] },
         config: {
           responseModalities: [Modality.IMAGE],
@@ -378,7 +380,58 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex flex-col items-end mr-2">
+            <span className={cn(
+              "text-[9px] font-bold uppercase tracking-wider mb-1",
+              isDarkMode ? "text-zinc-500" : "text-zinc-400"
+            )}>Text Reasoning Model</span>
+            <select 
+              value={selectedTextModel}
+              onChange={(e) => setSelectedTextModel(e.target.value)}
+              className={cn(
+                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right",
+                isDarkMode ? "text-indigo-400" : "text-indigo-600"
+              )}
+            >
+<option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+<option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+<option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
+<option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
+<option value="gemini-flash-latest">Gemini Flash Latest</option>
+<option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
+<option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+<option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+<option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
+            </select>
+          </div>
+
+          <div className="hidden sm:flex flex-col items-end mr-2">
+            <span className={cn(
+              "text-[9px] font-bold uppercase tracking-wider mb-1",
+              isDarkMode ? "text-zinc-500" : "text-zinc-400"
+            )}>Image Generation Model</span>
+            <select 
+              value={selectedImageModel}
+              onChange={(e) => setSelectedImageModel(e.target.value)}
+              className={cn(
+                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right",
+                isDarkMode ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
+<option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
+<option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+<option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
+<option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
+<option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
+<option value="gemini-flash-latest">gemini-flash-latest</option>
+<option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+<option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+<option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+<option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
+            </select>
+          </div>
+
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={cn(
