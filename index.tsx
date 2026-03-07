@@ -98,7 +98,11 @@ const App: React.FC = () => {
     return new GoogleGenAI({ apiKey: activeApiKey });
   };
   
-  const systemInstruction = `คุณคือ "AI ผู้เชี่ยวชาญด้านผลิตภัณฑ์ รวมถึงเรื่องอื่นๆ ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย" ที่มีความรู้ลึกซึ้งในหลากหลายมิติ
+  const systemInstruction = `คุณคือ "AI ผู้เชี่ยวชาญในทุกๆ ด้าน ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย" ที่มีความรู้ลึกซึ้งในหลากหลายมิติ เช่น
+- ด้านศาสนา เช่น พุทธ คริสต์​ อิสลาม​ ฮินดู รวมถึงลัทธิความเชื่อต่างๆ
+- ด้านศิลปะ วัฒนธรรม การศึกษา
+- ด้านวิทยาศาสตร์​ เทคโนโลยี​ วิศวกรรม คอมพิวเตอร์​ AI, programming, coding
+- การแพทย์ สาธารณสุข เภสัชศาสตร์​ พยาบาล​
 - การผลิตและการออกแบบสินค้า
 - การตลาดและจิตวิทยาผู้บริโภค
 - การออกแบบบรรจุภัณฑ์ (Packaging)
@@ -437,7 +441,7 @@ const App: React.FC = () => {
 
       {/* Header */}
       <header className={cn(
-        "backdrop-blur-md border-b px-6 py-4 flex items-center justify-between transition-all z-10",
+        "backdrop-blur-md border-b px-6 py-4 items-center justify-center text-center transition-all",
         isDarkMode 
           ? "bg-zinc-950/80 border-zinc-800 shadow-lg shadow-black/20" 
           : "bg-white/80 border-zinc-200 shadow-sm"
@@ -473,12 +477,13 @@ const App: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-col items-center">
+        <div className="items-center">
           <h1 className={cn(
-            "text-2xl font-bold leading-tight tracking-tight",
+            "text-5xl font-bold leading-tight tracking-tight",
             isDarkMode ? "text-white" : "text-zinc-900"
           )}>AI General Expert</h1>
-          <div className="flex items-center gap-2">
+          <br/>
+          <div className="text-center items-center gap-2">
             <p className={cn(
               "text-[10px] font-bold uppercase tracking-[0.2em]",
               isDarkMode ? "text-zinc-500" : "text-zinc-400"
@@ -487,8 +492,8 @@ const App: React.FC = () => {
             <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">ts</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-3">
+<br/>
+        <div className="flex md:flex-row justify-between text-center items-center gap-3">
           <div className="hidden sm:flex flex-col items-end mr-2">
             <span className={cn(
               "text-[9px] font-bold uppercase tracking-wider mb-1",
@@ -799,26 +804,35 @@ const App: React.FC = () => {
                       isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                     )}
                   >
-                    <img 
-                      src={img} 
-                      alt="Generated" 
-                      className="w-full aspect-square object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px]">
-                      <button 
-                        onClick={() => handleSaveImage(img)}
-                        className="p-3 bg-white text-zinc-900 rounded-2xl hover:bg-zinc-100 transition-all transform hover:scale-110"
-                        title="Download"
-                      >
-                        <Download size={20} />
-                      </button>
+                    <div className="relative">
+                      <img 
+                        src={img} 
+                        alt="Generated" 
+                        className="w-full aspect-square object-cover"
+                        referrerPolicy="no-referrer"
+                      />
                       <button 
                         onClick={() => setGeneratedImages(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-3 bg-white text-red-600 rounded-2xl hover:bg-red-50 transition-all transform hover:scale-110"
+                        className="absolute top-2 right-2 p-2 bg-black/40 hover:bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm"
                         title="Delete"
                       >
-                        <Trash2 size={20} />
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <div className={cn(
+                      "p-3 border-t",
+                      isDarkMode ? "border-zinc-800 bg-zinc-900/50" : "border-zinc-100 bg-zinc-50/30"
+                    )}>
+                      <button 
+                        onClick={() => handleSaveImage(img)}
+                        className={cn(
+                          "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm",
+                          isDarkMode 
+                            ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/10" 
+                            : "bg-white hover:bg-zinc-50 text-indigo-600 border border-zinc-200"
+                        )}
+                      >
+                        <Download size={14} /> Download Image
                       </button>
                     </div>
                   </motion.div>
