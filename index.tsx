@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -17,7 +16,8 @@ import {
   MessageSquare,
   History,
   Moon,
-  Sun
+  Sun,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -42,6 +42,10 @@ interface AttachedImage {
 }
 
 const App: React.FC = () => {
+  // --- API Key States ---
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+  const [activeApiKey, setActiveApiKey] = useState<string>('');
+
   const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3-flash-preview');
   const [selectedImageModel, setSelectedImageModel] = useState<string>('gemini-2.5-flash-image');
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
@@ -57,12 +61,46 @@ const App: React.FC = () => {
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const chatRef = useRef<Chat | null>(null);
 
-  const getAI = () => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("Missing GEMINI_API_KEY. Please set it in your environment variables.");
+  // --- API Key Management Effects ---
+  useEffect(() => {
+    // โหลด API key จาก localStorage ตอนเริ่มแอพ
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) {
+      setApiKeyInput(storedKey);
+      setActiveApiKey(storedKey);
+    } else {
+      setApiKeyInput('no API key');
     }
-    return new GoogleGenAI({ apiKey });
+  }, []);
+
+  const handleSaveApiKey = () => {
+    const key = apiKeyInput.trim();
+    if (key && key !== 'no API key') {
+      localStorage.setItem('gemini_api_key', key);
+      setActiveApiKey(key);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'บันทึก API Key เข้าระบบสำเร็จ พร้อมใช้งานครับ!' }]);
+    }
+  };
+
+  const handleCopyApiKey = () => {
+    if (apiKeyInput && apiKeyInput !== 'no API key') {
+      navigator.clipboard.writeText(apiKeyInput);
+    }
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setApiKeyInput('');
+    setActiveApiKey('');
+    chatRef.current = null;
+  };
+
+  // --- AI Initialization ---
+  const getAI = () => {
+    if (!activeApiKey) {
+      throw new Error("Missing API Key");
+    }
+    return new GoogleGenAI({ apiKey: activeApiKey });
   };
   
   const systemInstruction = `คุณคือ "AI ผู้เชี่ยวชาญด้านผลิตภัณฑ์ รวมถึงเรื่องอื่นๆ ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย" ที่มีความรู้ลึกซึ้งในหลากหลายมิติ
@@ -96,6 +134,14 @@ const App: React.FC = () => {
   };
 
   const initializeChat = (history: Message[] = []) => {
+    if (!activeApiKey) {
+      setChatHistory(prev => {
+        if (prev.length > 0 && prev[prev.length - 1].text.includes('กรุณากรอก API Key')) return prev;
+        return [...prev, { role: 'model', text: 'กรุณากรอก API Key ในช่องด้านบนสุดแล้วกดปุ่ม Send ก่อนเริ่มใช้งานครับ' }];
+      });
+      return;
+    }
+
     try {
       const ai = getAI();
       const geminiHistory = history.map(msg => ({
@@ -113,13 +159,12 @@ const App: React.FC = () => {
       });
     } catch (error) {
       console.error("Failed to initialize chat:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณาตั้งค่า GEMINI_API_KEY ใน Environment Variables ก่อนใช้งานครับ' }]);
     }
   };
 
   useEffect(() => {
     initializeChat(chatHistory);
-  }, [selectedTextModel]);
+  }, [selectedTextModel, activeApiKey]);
 
   useEffect(() => {
     if (chatHistoryRef.current) {
@@ -195,11 +240,16 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error("Image Gen Error:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสร้างภาพครับ' }]);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสร้างภาพครับ โปรดตรวจสอบ API Key อีกครั้ง' }]);
     }
   };
 
   const handleSendMessage = async () => {
+    if (!activeApiKey) {
+      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณากรอก API Key และกดปุ่ม Send ก่อนส่งข้อความครับ' }]);
+      return;
+    }
+
     const trimmedInput = userInput.trim();
     const hasImages = attachedImages.some(img => img !== null);
     
@@ -228,7 +278,7 @@ const App: React.FC = () => {
       }
       
       if (!chatRef.current) {
-        throw new Error("Chat could not be initialized. Please check your API key.");
+        throw new Error("Chat could not be initialized.");
       }
 
       const imageParts = await Promise.all(
@@ -248,7 +298,6 @@ const App: React.FC = () => {
 
       const response = await chatRef.current!.sendMessage({ message: [...imageParts, { text: prompt }] });
       
-      // Check for function calls
       if (response.functionCalls) {
         for (const call of response.functionCalls) {
           if (call.name === 'generate_image') {
@@ -262,7 +311,7 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error("Error calling Gemini API:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาลองใหม่อีกครั้งครับ' }]);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาตรวจสอบ API Key หรือลองใหม่อีกครั้งครับ' }]);
     } finally {
       setIsLoading(false);
     }
@@ -327,9 +376,60 @@ const App: React.FC = () => {
       "max-w-6xl mx-auto min-h-screen md:h-screen flex flex-col font-sans transition-colors duration-500",
       isDarkMode ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"
     )}>
+      
+      {/* API Key Banner Config */}
+      <div className={cn(
+        "w-full px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 border-b transition-colors",
+        isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"
+      )}>
+        <label className={cn(
+          "whitespace-nowrap font-bold text-sm",
+          isDarkMode ? "text-zinc-300" : "text-zinc-700"
+        )}>
+          Google AI Studio API Key:
+        </label>
+        <input
+          type="text"
+          value={apiKeyInput}
+          onChange={(e) => setApiKeyInput(e.target.value)}
+          placeholder="Enter your API Key here..."
+          className={cn(
+            "flex-1 w-full max-w-2xl font-mono text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all",
+            isDarkMode 
+              ? "bg-zinc-950 border-zinc-700 text-emerald-400 focus:ring-indigo-500/50" 
+              : "bg-zinc-50 border-zinc-300 text-emerald-600 focus:ring-indigo-500/50"
+          )}
+        />
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button 
+            onClick={handleSaveApiKey}
+            className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-indigo-500/20 active:scale-95"
+          >
+            <Send size={16} /> Send
+          </button>
+          <button 
+            onClick={handleCopyApiKey}
+            className={cn(
+              "flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all active:scale-95",
+              isDarkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200" : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+            )}
+            title="Copy API Key"
+          >
+            <Copy size={16} /> Copy
+          </button>
+          <button 
+            onClick={handleClearApiKey}
+            className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-semibold text-sm rounded-xl transition-all active:scale-95"
+            title="Clear System and Input"
+          >
+            <Trash2 size={16} /> Clear
+          </button>
+        </div>
+      </div>
+
       {/* Header */}
       <header className={cn(
-        "backdrop-blur-md border-b px-6 py-4 flex items-center justify-between transition-all",
+        "backdrop-blur-md border-b px-6 py-4 flex items-center justify-between transition-all z-10",
         isDarkMode 
           ? "bg-zinc-950/80 border-zinc-800 shadow-lg shadow-black/20" 
           : "bg-white/80 border-zinc-200 shadow-sm"
@@ -390,19 +490,19 @@ const App: React.FC = () => {
               value={selectedTextModel}
               onChange={(e) => setSelectedTextModel(e.target.value)}
               className={cn(
-                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right",
+                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right outline-none",
                 isDarkMode ? "text-indigo-400" : "text-indigo-600"
               )}
             >
-<option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-<option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-<option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
-<option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
-<option value="gemini-flash-latest">Gemini Flash Latest</option>
-<option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
-<option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-<option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-<option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+              <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
+              <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
+              <option value="gemini-flash-latest">Gemini Flash Latest</option>
+              <option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
             </select>
           </div>
 
@@ -415,20 +515,20 @@ const App: React.FC = () => {
               value={selectedImageModel}
               onChange={(e) => setSelectedImageModel(e.target.value)}
               className={cn(
-                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right",
+                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right outline-none",
                 isDarkMode ? "text-emerald-400" : "text-emerald-600"
               )}
             >
-<option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
-<option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
-<option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
-<option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
-<option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
-<option value="gemini-flash-latest">gemini-flash-latest</option>
-<option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-<option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-<option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-<option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
+              <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
+              <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+              <option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
+              <option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
+              <option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
+              <option value="gemini-flash-latest">gemini-flash-latest</option>
+              <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+              <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
             </select>
           </div>
 
@@ -724,4 +824,3 @@ const App: React.FC = () => {
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(<App />);
-
