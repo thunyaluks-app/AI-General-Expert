@@ -34,6 +34,7 @@ interface Message {
   text: string;
   images?: string[];
   isImageGen?: boolean;
+  isSystem?: boolean; // เพิ่มตัวแปรนี้เพื่อแยกแยะว่าเป็นข้อความแจ้งเตือนจากระบบหรือไม่
 }
 
 interface AttachedImage {
@@ -42,9 +43,14 @@ interface AttachedImage {
 }
 
 const App: React.FC = () => {
-  // --- API Key States ---
-  const [apiKeyInput, setApiKeyInput] = useState<string>('');
-  const [activeApiKey, setActiveApiKey] = useState<string>('');
+  // --- API Key States (แก้ไขให้อ่านค่า Synchronous ทันทีตอนโหลดแอป) ---
+  const [apiKeyInput, setApiKeyInput] = useState<string>(() => {
+    const stored = localStorage.getItem('gemini_api_key');
+    return stored ? stored : 'no API key';
+  });
+  const [activeApiKey, setActiveApiKey] = useState<string>(() => {
+    return localStorage.getItem('gemini_api_key') || '';
+  });
 
   const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3-flash-preview');
   const [selectedImageModel, setSelectedImageModel] = useState<string>('gemini-2.5-flash-image');
@@ -61,24 +67,12 @@ const App: React.FC = () => {
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const chatRef = useRef<Chat | null>(null);
 
-  // --- API Key Management Effects ---
-  useEffect(() => {
-    // โหลด API key จาก localStorage ตอนเริ่มแอพ
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) {
-      setApiKeyInput(storedKey);
-      setActiveApiKey(storedKey);
-    } else {
-      setApiKeyInput('no API key');
-    }
-  }, []);
-
   const handleSaveApiKey = () => {
     const key = apiKeyInput.trim();
     if (key && key !== 'no API key') {
       localStorage.setItem('gemini_api_key', key);
       setActiveApiKey(key);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'บันทึก API Key เข้าระบบสำเร็จ พร้อมใช้งานครับ!' }]);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'บันทึก API Key เข้าระบบสำเร็จ พร้อมใช้งานครับ!', isSystem: true }]);
     }
   };
 
@@ -93,6 +87,7 @@ const App: React.FC = () => {
     setApiKeyInput('');
     setActiveApiKey('');
     chatRef.current = null;
+    setChatHistory(prev => [...prev, { role: 'model', text: 'ลบ API Key ออกจากระบบเรียบร้อยแล้วครับ', isSystem: true }]);
   };
 
   // --- AI Initialization ---
@@ -133,21 +128,29 @@ const App: React.FC = () => {
     },
   };
 
-  const initializeChat = (history: Message[] = []) => {
-    if (!activeApiKey) {
-      setChatHistory(prev => {
-        if (prev.length > 0 && prev[prev.length - 1].text.includes('กรุณากรอก API Key')) return prev;
-        return [...prev, { role: 'model', text: 'กรุณากรอก API Key ในช่องด้านบนสุดแล้วกดปุ่ม Send ก่อนเริ่มใช้งานครับ' }];
-      });
-      return;
+  // กรองและจับคู่ประวัติแชทให้ถูกต้องก่อนส่งให้ AI (ป้องกัน Error 400)
+  const buildValidHistory = (history: Message[]) => {
+    const filtered = history.filter(msg => !msg.isSystem && !msg.isImageGen);
+    const pairedHistory = [];
+    
+    for (let i = 0; i < filtered.length - 1; i++) {
+      if (filtered[i].role === 'user' && filtered[i+1].role === 'model') {
+        pairedHistory.push(
+          { role: 'user', parts: [{ text: filtered[i].text }] },
+          { role: 'model', parts: [{ text: filtered[i+1].text }] }
+        );
+        i++; // ข้าม index ถัดไปเพราะถูกจับคู่ไปแล้ว
+      }
     }
+    return pairedHistory;
+  };
+
+  const initializeChat = (history: Message[] = []) => {
+    if (!activeApiKey) return; // ไม่ต้องแจ้งเตือนรัวๆ ตอนโหลดหน้า ให้เงียบไว้
 
     try {
       const ai = getAI();
-      const geminiHistory = history.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      }));
+      const geminiHistory = buildValidHistory(history) as any;
       
       chatRef.current = ai.chats.create({
         model: selectedTextModel,
@@ -236,17 +239,17 @@ const App: React.FC = () => {
       }
       
       if (!imageFound) {
-        setChatHistory(prev => [...prev, { role: 'model', text: 'ขออภัยครับ ผมไม่สามารถสร้างภาพได้ในขณะนี้ ลองเปลี่ยนคำบรรยายดูนะครับ' }]);
+        setChatHistory(prev => [...prev, { role: 'model', text: 'ขออภัยครับ ผมไม่สามารถสร้างภาพได้ในขณะนี้ ลองเปลี่ยนคำบรรยายดูนะครับ', isSystem: true }]);
       }
     } catch (error) {
       console.error("Image Gen Error:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสร้างภาพครับ โปรดตรวจสอบ API Key อีกครั้ง' }]);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสร้างภาพครับ โปรดตรวจสอบ API Key อีกครั้ง', isSystem: true }]);
     }
   };
 
   const handleSendMessage = async () => {
     if (!activeApiKey) {
-      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณากรอก API Key และกดปุ่ม Send ก่อนส่งข้อความครับ' }]);
+      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณากรอก API Key ในช่องด้านบนสุดแล้วกดปุ่ม Send ก่อนส่งข้อความครับ', isSystem: true }]);
       return;
     }
 
@@ -309,9 +312,14 @@ const App: React.FC = () => {
         const responseText = response.text || "ขออภัยครับ ผมไม่เข้าใจคำถามนี้";
         setChatHistory(prev => [...prev, { role: 'model', text: responseText }]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error calling Gemini API:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสื่อสารกับ AI กรุณาตรวจสอบ API Key หรือลองใหม่อีกครั้งครับ' }]);
+      // เพิ่ม isSystem: true เพื่อไม่ให้ข้อความ Error ถูกส่งกลับไปเป็น History ในรอบถัดไป
+      setChatHistory(prev => [...prev, { 
+        role: 'model', 
+        text: `เกิดข้อผิดพลาดในการสื่อสารกับ AI (${error?.message || 'Unknown Error'}) กรุณาตรวจสอบความถูกต้องของ API Key และลองใหม่อีกครั้งครับ`, 
+        isSystem: true 
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -528,7 +536,7 @@ const App: React.FC = () => {
               <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
               <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
               <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
+              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
             </select>
           </div>
 
@@ -612,9 +620,11 @@ const App: React.FC = () => {
                     "px-5 py-4 rounded-3xl text-sm shadow-md transition-all",
                     msg.role === 'user' 
                       ? "bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/20" 
-                      : isDarkMode 
-                        ? "bg-zinc-900 text-zinc-200 border border-zinc-800 rounded-tl-none" 
-                        : "bg-zinc-100 text-zinc-800 rounded-tl-none"
+                      : msg.isSystem
+                        ? isDarkMode ? "bg-red-900/20 text-red-400 border border-red-900/50 rounded-tl-none" : "bg-red-50 text-red-600 border border-red-200 rounded-tl-none"
+                        : isDarkMode 
+                          ? "bg-zinc-900 text-zinc-200 border border-zinc-800 rounded-tl-none" 
+                          : "bg-zinc-100 text-zinc-800 rounded-tl-none"
                   )}>
                     <div className={cn(
                       "markdown-body",
