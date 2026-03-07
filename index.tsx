@@ -385,192 +385,198 @@ const App: React.FC = () => {
 
   return (
     <div className={cn(
-      "max-w-6xl mx-auto min-h-screen md:h-screen flex flex-col font-sans transition-colors duration-500",
+      "w-full min-h-screen flex flex-col font-sans transition-colors duration-500 overflow-x-hidden",
       isDarkMode ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"
     )}>
       
       {/* API Key Banner Config */}
       <div className={cn(
-        "w-full px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 border-b transition-colors",
+        "w-full px-6 py-2 flex flex-col lg:flex-row items-center justify-between gap-3 border-b transition-colors",
         isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"
       )}>
-        <label className={cn(
-          "whitespace-nowrap font-bold text-sm",
-          isDarkMode ? "text-zinc-300" : "text-zinc-700"
-        )}>
-          Google AI Studio API Key:
-        </label>
-        <input
-          type="text"
-          value={apiKeyInput}
-          onChange={(e) => setApiKeyInput(e.target.value)}
-          placeholder="Enter your API Key here..."
-          className={cn(
-            "flex-1 w-full max-w-2xl font-mono text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 transition-all",
-            isDarkMode 
-              ? "bg-zinc-950 border-zinc-700 text-emerald-400 focus:ring-indigo-500/50" 
-              : "bg-zinc-50 border-zinc-300 text-emerald-600 focus:ring-indigo-500/50"
-          )}
-        />
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex items-center gap-3 flex-1 w-full max-w-4xl">
+          <label className={cn(
+            "whitespace-nowrap font-bold text-[11px] uppercase tracking-wider opacity-70",
+            isDarkMode ? "text-zinc-300" : "text-zinc-700"
+          )}>
+            API Key:
+          </label>
+          <input
+            type="text"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            placeholder="Enter your API Key here..."
+            className={cn(
+              "flex-1 font-mono text-xs px-3 py-1.5 rounded-lg border focus:outline-none focus:ring-2 transition-all",
+              isDarkMode 
+                ? "bg-zinc-950 border-zinc-700 text-emerald-400 focus:ring-indigo-500/50" 
+                : "bg-zinc-50 border-zinc-300 text-emerald-600 focus:ring-indigo-500/50"
+            )}
+          />
+        </div>
+        <div className="flex items-center gap-2 w-full lg:w-auto">
           <button 
             onClick={handleSaveApiKey}
-            className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-indigo-500/20 active:scale-95"
+            className="flex-1 lg:flex-none flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-md shadow-indigo-500/20 active:scale-95"
           >
-            <Send size={16} /> Send
+            <Send size={14} /> Send
           </button>
           <button 
             onClick={handleCopyApiKey}
             className={cn(
-              "flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all active:scale-95",
+              "flex-1 lg:flex-none flex justify-center items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all active:scale-95",
               isDarkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200" : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
             )}
             title="Copy API Key"
           >
-            <Copy size={16} /> Copy
+            <Copy size={14} /> Copy
           </button>
           <button 
             onClick={handleClearApiKey}
-            className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-semibold text-sm rounded-xl transition-all active:scale-95"
+            className="flex-1 lg:flex-none flex justify-center items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-bold text-xs rounded-lg transition-all active:scale-95"
             title="Clear System and Input"
           >
-            <Trash2 size={16} /> Clear
+            <Trash2 size={14} /> Clear
           </button>
         </div>
       </div>
 
       {/* Header */}
       <header className={cn(
-        "backdrop-blur-md border-b px-6 py-4 items-center justify-center text-center transition-all",
+        "backdrop-blur-md border-b px-6 py-2 flex flex-col gap-2 transition-all",
         isDarkMode 
           ? "bg-zinc-950/80 border-zinc-800 shadow-lg shadow-black/20" 
           : "bg-white/80 border-zinc-200 shadow-sm"
       )}>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => openFileInputRef.current?.click()}
-            className={cn(
-              "p-2 rounded-lg transition-colors",
-              isDarkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-500 hover:bg-zinc-100"
-            )}
-            title="Open History"
-          >
-            <FolderOpen size={20} />
-          </button>
-          <button 
-            onClick={handleSaveChat}
-            disabled={chatHistory.length === 0 || isSaving}
-            className={cn(
-              "p-2 rounded-lg transition-colors disabled:opacity-30",
-              isDarkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-500 hover:bg-zinc-100"
-            )}
-            title="Save History"
-          >
-            <Save size={20} />
-          </button>
-          <input 
-            type="file" 
-            accept=".json" 
-            className="hidden" 
-            ref={openFileInputRef} 
-            onChange={handleFileOpen} 
-          />
-        </div>
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-1 order-2 lg:order-1">
+            <button 
+              onClick={() => openFileInputRef.current?.click()}
+              className={cn(
+                "p-1.5 rounded-lg transition-colors",
+                isDarkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-500 hover:bg-zinc-100"
+              )}
+              title="Open History"
+            >
+              <FolderOpen size={18} />
+            </button>
+            <button 
+              onClick={handleSaveChat}
+              disabled={chatHistory.length === 0 || isSaving}
+              className={cn(
+                "p-1.5 rounded-lg transition-colors disabled:opacity-30",
+                isDarkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-500 hover:bg-zinc-100"
+              )}
+              title="Save History"
+            >
+              <Save size={18} />
+            </button>
+            <input 
+              type="file" 
+              accept=".json" 
+              className="hidden" 
+              ref={openFileInputRef} 
+              onChange={handleFileOpen} 
+            />
+          </div>
 
-        <div className="items-center">
-          <h1 className={cn(
-            "text-5xl font-bold leading-tight tracking-tight",
-            isDarkMode ? "text-white" : "text-zinc-900"
-          )}>AI General Expert</h1>
-          <br/>
-          <div className="text-center items-center gap-2">
-            <p className={cn(
-              "text-[10px] font-bold uppercase tracking-[0.2em]",
-              isDarkMode ? "text-zinc-500" : "text-zinc-400"
-            )}>Consultant & Illustrator</p>
-            <span className="w-1 h-1 rounded-full bg-indigo-500"></span>
-            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">ts</p>
+          <div className="flex flex-col items-center text-center order-1 lg:order-2">
+            <h1 className={cn(
+              "text-5xl lg:text-5xl font-bold leading-tight tracking-tight",
+              isDarkMode ? "text-white" : "text-zinc-900"
+            )}>AI General Expert</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <p className={cn(
+                "text-[8px] font-bold uppercase tracking-[0.2em]",
+                isDarkMode ? "text-zinc-500" : "text-zinc-400"
+              )}>Consultant & Illustrator</p>
+              <span className="w-0.5 h-0.5 rounded-full bg-indigo-500"></span>
+              <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest">ts</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 order-3">
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className={cn(
+                "p-2 rounded-lg transition-all duration-300",
+                isDarkMode 
+                  ? "bg-zinc-800 text-yellow-400 hover:bg-zinc-700 shadow-inner shadow-black/50" 
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm"
+              )}
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
           </div>
         </div>
-<br/>
-        <div className="flex md:flex-row justify-between text-center items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end mr-2">
+
+        <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-1 border-t border-zinc-200/10">
+          <div className="flex items-center gap-2">
             <span className={cn(
-              "text-[9px] font-bold uppercase tracking-wider mb-1",
+              "text-[8px] font-bold uppercase tracking-wider",
               isDarkMode ? "text-zinc-500" : "text-zinc-400"
-            )}>Text Reasoning Model</span>
+            )}>Text:</span>
             <select 
               value={selectedTextModel}
               onChange={(e) => setSelectedTextModel(e.target.value)}
               className={cn(
-                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right outline-none",
+                "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
                 isDarkMode ? "text-indigo-400" : "text-indigo-600"
               )}
             >
-              <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-              <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
-              <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
-              <option value="gemini-flash-latest">Gemini Flash Latest</option>
-              <option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              <option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
+              <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
+              <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Lite</option>
+              <option value="gemini-flash-latest">Flash Latest</option>
+              <option value="gemini-flash-lite-latest">Lite Latest</option>
+              <option value="gemini-2.5-flash">2.5 Flash</option>
+              <option value="gemini-2.5-pro">2.5 Pro</option>
+              <option value="gemini-pro-latest">Pro Stable</option>
             </select>
           </div>
 
-          <div className="hidden sm:flex flex-col items-end mr-2">
+          <div className="flex items-center gap-2">
             <span className={cn(
-              "text-[9px] font-bold uppercase tracking-wider mb-1",
+              "text-[8px] font-bold uppercase tracking-wider",
               isDarkMode ? "text-zinc-500" : "text-zinc-400"
-            )}>Image Generation Model</span>
+            )}>Image:</span>
             <select 
               value={selectedImageModel}
               onChange={(e) => setSelectedImageModel(e.target.value)}
               className={cn(
-                "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0 text-right outline-none",
+                "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
                 isDarkMode ? "text-emerald-400" : "text-emerald-600"
               )}
             >
-              <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
-              <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
-              <option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
-              <option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
-              <option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
-              <option value="gemini-flash-latest">gemini-flash-latest</option>
-              <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-              <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-              <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
+<option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
+<option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+<option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
+<option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
+<option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
+<option value="gemini-flash-latest">gemini-flash-latest</option>
+<option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+<option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+<option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+<option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
             </select>
           </div>
-
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className={cn(
-              "p-2 rounded-xl transition-all duration-300",
-              isDarkMode 
-                ? "bg-zinc-800 text-yellow-400 hover:bg-zinc-700 shadow-inner shadow-black/50" 
-                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm"
-            )}
-          >
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col md:flex-row min-h-0 md:overflow-hidden">
+      <main className="flex flex-col lg:flex-row">
         {/* Chat Area */}
         <div className={cn(
-          "flex-[2] flex flex-col min-w-0 border-r transition-colors h-[600px] md:h-full",
+          "flex-1 lg:flex-[2] flex flex-col min-w-0 border-r transition-colors",
           isDarkMode ? "border-zinc-800 bg-zinc-950" : "border-zinc-200 bg-white"
         )}>
           <div 
             ref={chatHistoryRef}
-            className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
+            className="p-4 lg:p-6 space-y-6 scroll-smooth"
           >
             {chatHistory.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6">
+              <div className="min-h-[300px] flex flex-col items-center justify-center text-center p-8 space-y-6">
                 <div className={cn(
                   "w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-500",
                   isDarkMode 
@@ -670,7 +676,7 @@ const App: React.FC = () => {
 
           {/* Input Area */}
           <div className={cn(
-            "p-6 border-t transition-colors",
+            "p-3 lg:p-4 border-t transition-colors",
             isDarkMode ? "border-zinc-800 bg-zinc-950/50" : "border-zinc-200 bg-white"
           )}>
             {/* Image Attachments Preview */}
@@ -761,11 +767,11 @@ const App: React.FC = () => {
 
         {/* Sidebar - Generated Images */}
         <aside className={cn(
-          "w-full md:w-80 flex flex-col transition-colors border-l md:border-l-0",
+          "w-full lg:w-80 flex flex-col transition-colors border-l lg:border-l-0",
           isDarkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50/50 border-zinc-200"
         )}>
           <div className={cn(
-            "p-5 border-b flex items-center justify-between",
+            "p-3 border-b flex items-center justify-between",
             isDarkMode ? "bg-zinc-900/30 border-zinc-800" : "bg-white/50 border-zinc-200"
           )}>
             <div className="flex items-center gap-2 font-bold text-sm">
@@ -780,7 +786,7 @@ const App: React.FC = () => {
             </span>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="p-5 space-y-5">
             {generatedImages.length === 0 ? (
               <div className={cn(
                 "h-64 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed rounded-3xl transition-colors",
