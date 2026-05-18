@@ -511,7 +511,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-1 border-t border-zinc-200/10">
+        <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-1 border-t border-zinc-400/10">
           <div className="flex items-center gap-2">
             <span className={cn(
               "text-[8px] font-bold uppercase tracking-wider",
@@ -528,7 +528,7 @@ const App: React.FC = () => {
               <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
               <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
               <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
-              <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Lite</option>
+              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
               <option value="gemini-flash-latest">Flash Latest</option>
               <option value="gemini-flash-lite-latest">Lite Latest</option>
               <option value="gemini-2.5-flash">2.5 Flash</option>
