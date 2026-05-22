@@ -52,7 +52,7 @@ const App: React.FC = () => {
     return localStorage.getItem('gemini_api_key') || '';
   });
 
-  const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3-flash-preview');
+  const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3.5-flash');
   const [selectedImageModel, setSelectedImageModel] = useState<string>('gemini-2.5-flash-image');
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -525,15 +525,16 @@ const App: React.FC = () => {
                 isDarkMode ? "text-indigo-400" : "text-indigo-600"
               )}
             >
-              <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
-              <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
-              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
-              <option value="gemini-flash-latest">Flash Latest</option>
-              <option value="gemini-flash-lite-latest">Lite Latest</option>
-              <option value="gemini-2.5-flash">2.5 Flash</option>
-              <option value="gemini-2.5-pro">2.5 Pro</option>
-              <option value="gemini-pro-latest">Pro Stable</option>
+<option value="gemini-3.5-flash">(20)Gemini 3.5 Flash</option>
+<option value="gemini-3-flash-preview">(20)Gemini 3 Flash Preview</option>
+<option value="gemini-3.1-pro-preview">(0)Gemini 3.1 Pro Preview</option>
+<option value="gemini-3.1-flash-lite">(500)Gemini 3.1 Flash Lite</option>
+<option value="gemini-flash-latest">Gemini Flash Latest</option>
+<option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
+<option value="gemini-2.5-flash">(20)Gemini 2.5 Flash</option>
+<option value="gemini-2.5-flash-lite">(20)Gemini 2.5 Flash Lite</option>
+<option value="gemini-2.5-pro">(0)Gemini 2.5 Pro</option>
+<option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
             </select>
           </div>
 
