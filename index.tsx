@@ -23,6 +23,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import Markdown from 'react-markdown';
+import { 
+  fetchCentralAIModels, 
+  getDefaultModelForLevel1, 
+  FALLBACK_TEXT_MODELS, 
+  FALLBACK_IMAGE_MODELS, 
+  type AIModel 
+} from './aiModelsService';
 
 /** Utility for tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -52,8 +59,14 @@ const App: React.FC = () => {
     return localStorage.getItem('gemini_api_key') || '';
   });
 
-  const [selectedTextModel, setSelectedTextModel] = useState<string>('gemini-3.5-flash');
-  const [selectedImageModel, setSelectedImageModel] = useState<string>('gemini-2.5-flash-image');
+  const [textModels, setTextModels] = useState<AIModel[]>(FALLBACK_TEXT_MODELS);
+  const [imageModels, setImageModels] = useState<AIModel[]>(FALLBACK_IMAGE_MODELS);
+  const [selectedTextModel, setSelectedTextModel] = useState<string>(() => 
+    getDefaultModelForLevel1(FALLBACK_TEXT_MODELS, 'gemini-3.6-flash')
+  );
+  const [selectedImageModel, setSelectedImageModel] = useState<string>(() => 
+    getDefaultModelForLevel1(FALLBACK_IMAGE_MODELS, 'gemini-3-pro-image')
+  );
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState<string>('');
@@ -168,6 +181,38 @@ const App: React.FC = () => {
       console.error("Failed to initialize chat:", error);
     }
   };
+
+  // Load Centralized AI Models from Firestore on page refresh / mount (Level 1 default)
+  useEffect(() => {
+    const loadCentralModels = async () => {
+      const centralModels = await fetchCentralAIModels();
+      if (centralModels.length > 0) {
+        // Group by category used in app
+        const textCategoryList = centralModels.filter(m => 
+          ['text_reasoning', 'text', 'text_gen', 'chat'].includes(m.category)
+        );
+        const imageCategoryList = centralModels.filter(m => 
+          ['image_gen', 'image', 'image_generation'].includes(m.category)
+        );
+
+        if (textCategoryList.length > 0) {
+          setTextModels(textCategoryList);
+          // Set Level 1 default model on page refresh
+          const defaultTextModel = getDefaultModelForLevel1(textCategoryList, 'gemini-3.6-flash');
+          setSelectedTextModel(defaultTextModel);
+        }
+
+        if (imageCategoryList.length > 0) {
+          setImageModels(imageCategoryList);
+          // Set Level 1 default model on page refresh
+          const defaultImageModel = getDefaultModelForLevel1(imageCategoryList, 'gemini-3-pro-image');
+          setSelectedImageModel(defaultImageModel);
+        }
+      }
+    };
+
+    loadCentralModels();
+  }, []);
 
   useEffect(() => {
     initializeChat(chatHistory);
@@ -512,57 +557,51 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-1 border-t border-zinc-400/10">
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-[8px] font-bold uppercase tracking-wider",
-              isDarkMode ? "text-zinc-500" : "text-zinc-400"
-            )}>Text:</span>
-            <select 
-              value={selectedTextModel}
-              onChange={(e) => setSelectedTextModel(e.target.value)}
-              className={cn(
-                "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
-                isDarkMode ? "text-indigo-400" : "text-indigo-600"
-              )}
-            >
-<option value="gemini-3.5-flash">(20)Gemini 3.5 Flash</option>
-<option value="gemini-3-flash-preview">(20)Gemini 3 Flash Preview</option>
-<option value="gemini-3.1-pro-preview">(0)Gemini 3.1 Pro Preview</option>
-<option value="gemini-3.1-flash-lite">(500)Gemini 3.1 Flash Lite</option>
-<option value="gemini-flash-latest">Gemini Flash Latest</option>
-<option value="gemini-flash-lite-latest">Gemini Flash Lite Latest</option>
-<option value="gemini-2.5-flash">(20)Gemini 2.5 Flash</option>
-<option value="gemini-2.5-flash-lite">(20)Gemini 2.5 Flash Lite</option>
-<option value="gemini-2.5-pro">(0)Gemini 2.5 Pro</option>
-<option value="gemini-pro-latest">Gemini Pro (Latest Stable)</option>
-            </select>
-          </div>
+          {textModels.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "text-[8px] font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-500" : "text-zinc-400"
+              )}>Text:</span>
+              <select 
+                value={selectedTextModel}
+                onChange={(e) => setSelectedTextModel(e.target.value)}
+                className={cn(
+                  "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
+                  isDarkMode ? "text-indigo-400" : "text-indigo-600"
+                )}
+              >
+                {textModels.map((m) => (
+                  <option key={m.id} value={m.modelId}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-[8px] font-bold uppercase tracking-wider",
-              isDarkMode ? "text-zinc-500" : "text-zinc-400"
-            )}>Image:</span>
-            <select 
-              value={selectedImageModel}
-              onChange={(e) => setSelectedImageModel(e.target.value)}
-              className={cn(
-                "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
-                isDarkMode ? "text-emerald-400" : "text-emerald-600"
-              )}
-            >
-<option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Default)</option>
-<option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
-<option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
-<option value="gemini-flash-image-latest">Gemini Flash Image Latest</option>
-<option value="gemini-pro-image-latest">Gemini Pro Image Latest</option>
-<option value="gemini-flash-latest">gemini-flash-latest</option>
-<option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-<option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-<option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-<option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image (High Quality)</option>
-            </select>
-          </div>
+          {imageModels.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "text-[8px] font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-500" : "text-zinc-400"
+              )}>Image:</span>
+              <select 
+                value={selectedImageModel}
+                onChange={(e) => setSelectedImageModel(e.target.value)}
+                className={cn(
+                  "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
+                  isDarkMode ? "text-emerald-400" : "text-emerald-600"
+                )}
+              >
+                {imageModels.map((m) => (
+                  <option key={m.id} value={m.modelId}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </header>
 
