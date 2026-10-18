@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { GoogleGenAI, Modality, Chat, GenerateContentResponse, Type, FunctionDeclaration } from "@google/genai";
 import { 
   Send, 
   Image as ImageIcon, 
@@ -13,23 +12,36 @@ import {
   Save, 
   FolderOpen,
   Sparkles,
-  MessageSquare,
-  History,
   Moon,
   Sun,
-  Copy
+  Copy,
+  Activity,
+  Key,
+  Layers,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import Markdown from 'react-markdown';
 import { 
-  fetchCentralAIModels, 
+  subscribeCentralAIModels,
   getDefaultModelForLevel1, 
+  deduplicateModels,
   FALLBACK_TEXT_MODELS, 
   FALLBACK_IMAGE_MODELS, 
   type AIModel 
 } from './aiModelsService';
+import { 
+  executeChatWithTracking, 
+  executeImageWithTracking 
+} from './src/services/geminiClientService';
+import { resolveModelName } from './src/services/modelResolver';
+import { FloatingMenu } from './src/components/FloatingMenu';
+import { ExecutionTrackerModal } from './src/components/ExecutionTrackerModal';
+import { ApiKeyModal } from './src/components/ApiKeyModal';
+import { executionTracker, ExecutionLogEntry } from './src/services/executionTracker';
 
 /** Utility for tailwind class merging */
 function cn(...inputs: ClassValue[]) {
@@ -41,7 +53,9 @@ interface Message {
   text: string;
   images?: string[];
   isImageGen?: boolean;
-  isSystem?: boolean; // เพิ่มตัวแปรนี้เพื่อแยกแยะว่าเป็นข้อความแจ้งเตือนจากระบบหรือไม่
+  isSystem?: boolean;
+  actualModel?: string;
+  usedFallback?: boolean;
 }
 
 interface AttachedImage {
@@ -50,15 +64,16 @@ interface AttachedImage {
 }
 
 const App: React.FC = () => {
-  // --- API Key States (แก้ไขให้อ่านค่า Synchronous ทันทีตอนโหลดแอป) ---
+  // --- API Key States ---
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => {
     const stored = localStorage.getItem('gemini_api_key');
-    return stored ? stored : 'no API key';
+    return stored ? stored : '';
   });
   const [activeApiKey, setActiveApiKey] = useState<string>(() => {
     return localStorage.getItem('gemini_api_key') || '';
   });
 
+  // Centralized AI Models State
   const [textModels, setTextModels] = useState<AIModel[]>(FALLBACK_TEXT_MODELS);
   const [imageModels, setImageModels] = useState<AIModel[]>(FALLBACK_IMAGE_MODELS);
   const [selectedTextModel, setSelectedTextModel] = useState<string>(() => 
@@ -67,6 +82,8 @@ const App: React.FC = () => {
   const [selectedImageModel, setSelectedImageModel] = useState<string>(() => 
     getDefaultModelForLevel1(FALLBACK_IMAGE_MODELS, 'gemini-3-pro-image')
   );
+
+  // Attached images (up to 6)
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState<string>('');
@@ -74,150 +91,48 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
-  
+
+  // Modals
+  const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [latestLog, setLatestLog] = useState<ExecutionLogEntry | null>(null);
+
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const chatHistoryRef = useRef<HTMLDivElement | null>(null);
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
-  const chatRef = useRef<Chat | null>(null);
 
-  const handleSaveApiKey = () => {
-    const key = apiKeyInput.trim();
-    if (key && key !== 'no API key') {
-      localStorage.setItem('gemini_api_key', key);
-      setActiveApiKey(key);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'บันทึก API Key เข้าระบบสำเร็จ พร้อมใช้งานครับ!', isSystem: true }]);
-    }
-  };
-
-  const handleCopyApiKey = () => {
-    if (apiKeyInput && apiKeyInput !== 'no API key') {
-      navigator.clipboard.writeText(apiKeyInput);
-    }
-  };
-
-  const handleClearApiKey = () => {
-    localStorage.removeItem('gemini_api_key');
-    setApiKeyInput('');
-    setActiveApiKey('');
-    chatRef.current = null;
-    setChatHistory(prev => [...prev, { role: 'model', text: 'ลบ API Key ออกจากระบบเรียบร้อยแล้วครับ', isSystem: true }]);
-  };
-
-  // --- AI Initialization ---
-  const getAI = () => {
-    if (!activeApiKey) {
-      throw new Error("Missing API Key");
-    }
-    return new GoogleGenAI({ apiKey: activeApiKey });
-  };
-  
-  const systemInstruction = `คุณคือ "AI ผู้เชี่ยวชาญในทุกๆ ด้าน ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย" ที่มีความรู้ลึกซึ้งในหลากหลายมิติ เช่น
-- ด้านศาสนา เช่น พุทธ คริสต์​ อิสลาม​ ฮินดู รวมถึงลัทธิความเชื่อต่างๆ
-- ด้านศิลปะ วัฒนธรรม การศึกษา
-- ด้านวิทยาศาสตร์​ เทคโนโลยี​ วิศวกรรม คอมพิวเตอร์​ AI, programming, coding
-- การแพทย์ สาธารณสุข เภสัชศาสตร์​ พยาบาล​
-- การผลิตและการออกแบบสินค้า
-- การตลาดและจิตวิทยาผู้บริโภค
-- การออกแบบบรรจุภัณฑ์ (Packaging)
-- การวิเคราะห์คู่แข่งและแนวโน้มตลาด
-- เรื่องอื่นๆ ตามเนื้อหาที่ผู้ใช้ถามหรือสนทนาด้วย
-
-คุณต้องให้คำปรึกษาที่เป็นประโยชน์ วิเคราะห์อย่างละเอียด และเมื่อผู้ใช้ต้องการภาพประกอบ คุณสามารถสร้างภาพประกอบ (Illustration) เพื่อช่วยให้ผู้ใช้เห็นภาพได้ชัดเจนขึ้น
-หากคุณต้องการแสดงภาพประกอบให้ผู้ใช้เห็น ให้ใช้เครื่องมือ "generate_image" เสมอ พร้อมทั้งแสดง prompt เป็นภาษาอังกฤษอย่างละเอียดสำหรับสร้างภาพนั้นด้วย และดูให้แน่ใจว่าภาพได้ถูกสร้างแล้วอย่างสมบูรณ์จริงๆ หรือมี error อะไร ห้ามตอบเป็น JSON หรือโค้ดหลอกๆ
-ตอบเป็นภาษาไทยที่สุภาพ เป็นกันเอง แต่มีความเป็นมืออาชีพ ถ้าผู้ใช้ยังไม่แสดงเจตนาว่าต้องการภาพประกอบ ก็ตอบคำถามก่อนโดยยังไม่ต้องสร้างภาพ`;
-
-  const generateImageTool: FunctionDeclaration = {
-    name: "generate_image",
-    parameters: {
-      type: Type.OBJECT,
-      description: "สร้างภาพประกอบสินค้าหรือบรรจุภัณฑ์ตามคำบรรยาย",
-      properties: {
-        prompt: {
-          type: Type.STRING,
-          description: "คำบรรยายภาพที่ต้องการสร้างอย่างละเอียด (ภาษาอังกฤษจะให้ผลลัพธ์ที่ดีกว่า)",
-        },
-        aspect_ratio: {
-          type: Type.STRING,
-          description: "อัตราส่วนภาพ เช่น '1:1', '16:9', '9:16'",
-        }
-      },
-      required: ["prompt"],
-    },
-  };
-
-  // กรองและจับคู่ประวัติแชทให้ถูกต้องก่อนส่งให้ AI (ป้องกัน Error 400)
-  const buildValidHistory = (history: Message[]) => {
-    const filtered = history.filter(msg => !msg.isSystem && !msg.isImageGen);
-    const pairedHistory = [];
-    
-    for (let i = 0; i < filtered.length - 1; i++) {
-      if (filtered[i].role === 'user' && filtered[i+1].role === 'model') {
-        pairedHistory.push(
-          { role: 'user', parts: [{ text: filtered[i].text }] },
-          { role: 'model', parts: [{ text: filtered[i+1].text }] }
-        );
-        i++; // ข้าม index ถัดไปเพราะถูกจับคู่ไปแล้ว
-      }
-    }
-    return pairedHistory;
-  };
-
-  const initializeChat = (history: Message[] = []) => {
-    if (!activeApiKey) return; // ไม่ต้องแจ้งเตือนรัวๆ ตอนโหลดหน้า ให้เงียบไว้
-
-    try {
-      const ai = getAI();
-      const geminiHistory = buildValidHistory(history) as any;
-      
-      chatRef.current = ai.chats.create({
-        model: selectedTextModel,
-        history: geminiHistory,
-        config: { 
-          systemInstruction,
-          tools: [{ functionDeclarations: [generateImageTool] }]
-        }
-      });
-    } catch (error) {
-      console.error("Failed to initialize chat:", error);
-    }
-  };
-
-  // Load Centralized AI Models from Firestore on page refresh / mount (Level 1 default)
+  // Subscribe to real-time Centralized AI Models Registry in Firestore
   useEffect(() => {
-    const loadCentralModels = async () => {
-      const centralModels = await fetchCentralAIModels();
-      if (centralModels.length > 0) {
-        // Group by category used in app
-        const textCategoryList = centralModels.filter(m => 
+    const unsubscribe = subscribeCentralAIModels((models) => {
+      if (models && models.length > 0) {
+        const textCategoryList = deduplicateModels(models.filter(m => 
           ['text_reasoning', 'text', 'text_gen', 'chat'].includes(m.category)
-        );
-        const imageCategoryList = centralModels.filter(m => 
+        ));
+        const imageCategoryList = deduplicateModels(models.filter(m => 
           ['image_gen', 'image', 'image_generation'].includes(m.category)
-        );
+        ));
 
         if (textCategoryList.length > 0) {
           setTextModels(textCategoryList);
-          // Set Level 1 default model on page refresh
-          const defaultTextModel = getDefaultModelForLevel1(textCategoryList, 'gemini-3.6-flash');
-          setSelectedTextModel(defaultTextModel);
         }
-
         if (imageCategoryList.length > 0) {
           setImageModels(imageCategoryList);
-          // Set Level 1 default model on page refresh
-          const defaultImageModel = getDefaultModelForLevel1(imageCategoryList, 'gemini-3-pro-image');
-          setSelectedImageModel(defaultImageModel);
         }
       }
-    };
+    });
 
-    loadCentralModels();
+    return () => unsubscribe();
   }, []);
 
+  // Listen to Execution Tracker for live status pulse
   useEffect(() => {
-    initializeChat(chatHistory);
-  }, [selectedTextModel, activeApiKey]);
+    const unsub = executionTracker.subscribe((logs, latest) => {
+      setLatestLog(latest);
+    });
+    return unsub;
+  }, []);
 
+  // Auto scroll chat to bottom
   useEffect(() => {
     if (chatHistoryRef.current) {
       chatHistoryRef.current.scrollTo({
@@ -226,6 +141,37 @@ const App: React.FC = () => {
       });
     }
   }, [chatHistory, isLoading]);
+
+  const handleSaveApiKey = (keyToSave?: string) => {
+    const key = (keyToSave !== undefined ? keyToSave : apiKeyInput).trim();
+    if (key && key !== 'no API key') {
+      localStorage.setItem('gemini_api_key', key);
+      setActiveApiKey(key);
+      setApiKeyInput(key);
+      setChatHistory(prev => [...prev, { 
+        role: 'model', 
+        text: 'บันทึก API Key เข้าระบบสำเร็จ พร้อมใช้งานด้วยระบบ Dual-Layer Resilient Engine ครับ!', 
+        isSystem: true 
+      }]);
+    }
+  };
+
+  const handleCopyApiKey = () => {
+    if (activeApiKey || apiKeyInput) {
+      navigator.clipboard.writeText(activeApiKey || apiKeyInput);
+    }
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setApiKeyInput('');
+    setActiveApiKey('');
+    setChatHistory(prev => [...prev, { 
+      role: 'model', 
+      text: 'ลบ Custom API Key ออกจากระบบแล้ว (ระบบจะสลับใช้ Server Environment Key หากมี)', 
+      isSystem: true 
+    }]);
+  };
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -255,53 +201,52 @@ const App: React.FC = () => {
     }
   };
 
-  const performImageGeneration = async (prompt: string, aspectRatio: string = "1:1", attachedImagesData: any[] = []) => {
+  // 3. Image Generation with Smart Cascade Fallback
+  const performImageGeneration = async (
+    prompt: string, 
+    aspectRatio: string = "1:1", 
+    attachedImagesData: any[] = []
+  ) => {
     try {
-      const ai = getAI();
-      const response = await ai.models.generateContent({
-        model: selectedImageModel,
-        contents: { parts: [...attachedImagesData, { text: prompt }] },
-        config: {
-          responseModalities: [Modality.IMAGE],
-          imageConfig: {
-            aspectRatio: (aspectRatio as any) || "1:1"
-          }
-        },
+      const result = await executeImageWithTracking({
+        prompt,
+        aspectRatio,
+        attachedImagesData,
+        requestedModel: selectedImageModel,
+        activeApiKey,
+        availableModels: imageModels,
       });
 
-      let imageFound = false;
-      const parts = response.candidates?.[0]?.content.parts ?? [];
-      
-      for (const part of parts) {
-        if (part.inlineData) {
-          const base64ImageBytes: string = part.inlineData.data;
-          const imageUrl = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
-          setGeneratedImages(prev => [imageUrl, ...prev]);
-          setChatHistory(prev => [...prev, { 
-            role: 'model', 
-            text: `สร้างภาพเสร็จแล้วครับสำหรับ: "${prompt}"`,
-            isImageGen: true
-          }]);
-          imageFound = true;
-          break;
-        }
+      if (result.imageUrl) {
+        setGeneratedImages(prev => [result.imageUrl, ...prev]);
+        setChatHistory(prev => [...prev, { 
+          role: 'model', 
+          text: `สร้างภาพเสร็จแล้วครับสำหรับ: "${prompt}" ${
+            result.usedFallback ? `\n\n*(สลับใช้โมเดลสำรอง ${result.actualModel} อัตโนมัติ)*` : ''
+          }`,
+          isImageGen: true,
+          actualModel: result.actualModel,
+          usedFallback: result.usedFallback,
+        }]);
+      } else {
+        setChatHistory(prev => [...prev, { 
+          role: 'model', 
+          text: 'ขออภัยครับ ไม่สามารถสร้างภาพได้ในขณะนี้ กรุณาลองใหม่อีกครั้งครับ', 
+          isSystem: true 
+        }]);
       }
-      
-      if (!imageFound) {
-        setChatHistory(prev => [...prev, { role: 'model', text: 'ขออภัยครับ ผมไม่สามารถสร้างภาพได้ในขณะนี้ ลองเปลี่ยนคำบรรยายดูนะครับ', isSystem: true }]);
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Image Gen Error:", error);
-      setChatHistory(prev => [...prev, { role: 'model', text: 'เกิดข้อผิดพลาดในการสร้างภาพครับ โปรดตรวจสอบ API Key อีกครั้ง', isSystem: true }]);
+      setChatHistory(prev => [...prev, { 
+        role: 'model', 
+        text: `เกิดข้อผิดพลาดในการสร้างภาพ: ${error?.message || 'Unknown error'}`, 
+        isSystem: true 
+      }]);
     }
   };
 
+  // 3. Text Message Handler with Smart Cascade Fallback
   const handleSendMessage = async () => {
-    if (!activeApiKey) {
-      setChatHistory(prev => [...prev, { role: 'model', text: 'กรุณากรอก API Key ในช่องด้านบนสุดแล้วกดปุ่ม Send ก่อนส่งข้อความครับ', isSystem: true }]);
-      return;
-    }
-
     const trimmedInput = userInput.trim();
     const hasImages = attachedImages.some(img => img !== null);
     
@@ -325,48 +270,51 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      if (!chatRef.current) {
-        initializeChat(chatHistory);
-      }
-      
-      if (!chatRef.current) {
-        throw new Error("Chat could not be initialized.");
-      }
+      const imageParts = currentImages
+        .filter((img): img is AttachedImage => img !== null)
+        .map(img => ({
+          inlineData: {
+            mimeType: img.file.type,
+            data: img.base64,
+          },
+        }));
 
-      const imageParts = await Promise.all(
-        currentImages
-          .filter((img): img is AttachedImage => img !== null)
-          .map(async (img) => ({
-             inlineData: {
-              mimeType: img.file.type,
-              data: img.base64,
-            },
-          }))
-      );
-      
-      const prompt = imageParts.length > 0 
-        ? `[มีรูปภาพแนบมาด้วย ${imageParts.length} รูป] ${currentUserInput}`
-        : currentUserInput;
+      const result = await executeChatWithTracking({
+        prompt: currentUserInput,
+        history: chatHistory,
+        images: userImages,
+        requestedModel: selectedTextModel,
+        activeApiKey,
+        availableModels: textModels,
+      });
 
-      const response = await chatRef.current!.sendMessage({ message: [...imageParts, { text: prompt }] });
-      
-      if (response.functionCalls) {
-        for (const call of response.functionCalls) {
+      // Handle function calling if generate_image was invoked
+      if (result.functionCalls && result.functionCalls.length > 0) {
+        for (const call of result.functionCalls) {
           if (call.name === 'generate_image') {
             const { prompt: genPrompt, aspect_ratio } = call.args as any;
             await performImageGeneration(genPrompt, aspect_ratio, imageParts);
           }
         }
       } else {
-        const responseText = response.text || "ขออภัยครับ ผมไม่เข้าใจคำถามนี้";
-        setChatHistory(prev => [...prev, { role: 'model', text: responseText }]);
+        const responseText = result.text || "ขออภัยครับ ผมไม่เข้าใจคำถามนี้";
+        let displayNotice = '';
+        if (result.usedFallback) {
+          displayNotice = `\n\n*(หมายเหตุ: ระบบสลับใช้โมเดลสำรอง ${result.actualModel} อัตโนมัติเพื่อความต่อเนื่อง)*`;
+        }
+
+        setChatHistory(prev => [...prev, { 
+          role: 'model', 
+          text: responseText + displayNotice,
+          actualModel: result.actualModel,
+          usedFallback: result.usedFallback,
+        }]);
       }
     } catch (error: any) {
-      console.error("Error calling Gemini API:", error);
-      // เพิ่ม isSystem: true เพื่อไม่ให้ข้อความ Error ถูกส่งกลับไปเป็น History ในรอบถัดไป
+      console.error("Error in AI execution:", error);
       setChatHistory(prev => [...prev, { 
         role: 'model', 
-        text: `เกิดข้อผิดพลาดในการสื่อสารกับ AI (${error?.message || 'Unknown Error'}) กรุณาตรวจสอบความถูกต้องของ API Key และลองใหม่อีกครั้งครับ`, 
+        text: `เกิดข้อผิดพลาดในการสื่อสารกับ AI (${error?.message || 'Connection error'}) กรุณาตรวจสอบ API Key ในเมนูตั้งค่าและลองใหม่อีกครั้งครับ`, 
         isSystem: true 
       }]);
     } finally {
@@ -408,7 +356,6 @@ const App: React.FC = () => {
         const loadedHistory = JSON.parse(content);
         if (Array.isArray(loadedHistory)) {
           setChatHistory(loadedHistory);
-          initializeChat(loadedHistory);
         }
       } catch (error) {
         console.error("Error opening chat file:", error);
@@ -430,27 +377,27 @@ const App: React.FC = () => {
 
   return (
     <div className={cn(
-      "w-full min-h-screen flex flex-col font-sans transition-colors duration-500 overflow-x-hidden",
+      "w-full min-h-screen flex flex-col font-sans transition-colors duration-500 overflow-x-hidden relative",
       isDarkMode ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"
     )}>
       
-      {/* API Key Banner Config */}
+      {/* Top Banner: Quick Key & Execution Tracker Status */}
       <div className={cn(
         "w-full px-6 py-2 flex flex-col lg:flex-row items-center justify-between gap-3 border-b transition-colors",
         isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"
       )}>
-        <div className="flex items-center gap-3 flex-1 w-full max-w-4xl">
+        <div className="flex items-center gap-3 flex-1 w-full max-w-3xl">
           <label className={cn(
-            "whitespace-nowrap font-bold text-[11px] uppercase tracking-wider opacity-70",
+            "whitespace-nowrap font-bold text-[11px] uppercase tracking-wider opacity-70 flex items-center gap-1",
             isDarkMode ? "text-zinc-300" : "text-zinc-700"
           )}>
-            API Key:
+            <Key size={12} /> API Key:
           </label>
           <input
-            type="text"
+            type="password"
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
-            placeholder="Enter your API Key here..."
+            placeholder={activeApiKey ? "••••••••••••••••••••••••" : "Paste Gemini API Key or use Server Proxy..."}
             className={cn(
               "flex-1 font-mono text-xs px-3 py-1.5 rounded-lg border focus:outline-none focus:ring-2 transition-all",
               isDarkMode 
@@ -459,9 +406,10 @@ const App: React.FC = () => {
             )}
           />
         </div>
+
         <div className="flex items-center gap-2 w-full lg:w-auto">
           <button 
-            onClick={handleSaveApiKey}
+            onClick={() => handleSaveApiKey()}
             className="flex-1 lg:flex-none flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-md shadow-indigo-500/20 active:scale-95"
           >
             <Send size={14} /> Send
@@ -479,9 +427,35 @@ const App: React.FC = () => {
           <button 
             onClick={handleClearApiKey}
             className="flex-1 lg:flex-none flex justify-center items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 font-bold text-xs rounded-lg transition-all active:scale-95"
-            title="Clear System and Input"
+            title="Clear API Key"
           >
             <Trash2 size={14} /> Clear
+          </button>
+
+          {/* AI Log Tracker Button */}
+          <button
+            onClick={() => setIsLogModalOpen(true)}
+            className={cn(
+              "flex-1 lg:flex-none flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all active:scale-95 border",
+              latestLog?.status === 'fallback_success'
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                : isDarkMode 
+                  ? "bg-zinc-800/80 hover:bg-zinc-800 text-indigo-400 border-zinc-700" 
+                  : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-200"
+            )}
+            title="Open AI Execution Log"
+          >
+            <Activity size={14} />
+            <span>AI Log</span>
+            {latestLog && (
+              <span className={`w-2 h-2 rounded-full ${
+                latestLog.status === 'success' 
+                  ? 'bg-emerald-400' 
+                  : latestLog.status === 'fallback_success' 
+                    ? 'bg-amber-400 animate-pulse' 
+                    : 'bg-red-400'
+              }`} />
+            )}
           </button>
         </div>
       </div>
@@ -527,14 +501,14 @@ const App: React.FC = () => {
 
           <div className="flex flex-col items-center text-center order-1 lg:order-2">
             <h1 className={cn(
-              "text-5xl lg:text-5xl font-bold leading-tight tracking-tight",
+              "text-4xl lg:text-5xl font-bold leading-tight tracking-tight",
               isDarkMode ? "text-white" : "text-zinc-900"
             )}>AI General Expert</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <p className={cn(
                 "text-[8px] font-bold uppercase tracking-[0.2em]",
                 isDarkMode ? "text-zinc-500" : "text-zinc-400"
-              )}>Consultant & Illustrator</p>
+              )}>Dual-Layer Resilient Engine • Smart Cascade</p>
               <span className="w-0.5 h-0.5 rounded-full bg-indigo-500"></span>
               <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest">ts</p>
             </div>
@@ -556,6 +530,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
+        {/* Live Synchronized Top Header Dropdowns */}
         <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-1 border-t border-zinc-400/10">
           {textModels.length > 0 && (
             <div className="flex items-center gap-2">
@@ -571,8 +546,8 @@ const App: React.FC = () => {
                   isDarkMode ? "text-indigo-400" : "text-indigo-600"
                 )}
               >
-                {textModels.map((m) => (
-                  <option key={m.id} value={m.modelId}>
+                {deduplicateModels(textModels).map((m) => (
+                  <option key={m.id || m.modelId} value={m.modelId}>
                     {m.name}
                   </option>
                 ))}
@@ -594,8 +569,8 @@ const App: React.FC = () => {
                   isDarkMode ? "text-emerald-400" : "text-emerald-600"
                 )}
               >
-                {imageModels.map((m) => (
-                  <option key={m.id} value={m.modelId}>
+                {deduplicateModels(imageModels).map((m) => (
+                  <option key={m.id || m.modelId} value={m.modelId}>
                     {m.name}
                   </option>
                 ))}
@@ -605,7 +580,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex flex-col lg:flex-row">
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col lg:flex-row pb-20">
         {/* Chat Area */}
         <div className={cn(
           "flex-1 lg:flex-[2] flex flex-col min-w-0 border-r transition-colors",
@@ -613,7 +589,7 @@ const App: React.FC = () => {
         )}>
           <div 
             ref={chatHistoryRef}
-            className="p-4 lg:p-6 space-y-6 scroll-smooth"
+            className="flex-1 p-4 lg:p-6 space-y-6 scroll-smooth overflow-y-auto"
           >
             {chatHistory.length === 0 && (
               <div className="min-h-[300px] flex flex-col items-center justify-center text-center p-8 space-y-6">
@@ -698,6 +674,13 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Fallback indicator footnote */}
+                  {msg.usedFallback && msg.actualModel && (
+                    <span className="text-[10px] mt-1 text-amber-500 font-medium flex items-center gap-1">
+                      <AlertTriangle size={10} /> Fallback to {msg.actualModel}
+                    </span>
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -709,7 +692,7 @@ const App: React.FC = () => {
                 className="flex items-center gap-3 text-indigo-500 text-xs font-bold tracking-wide"
               >
                 <Loader2 size={16} className="animate-spin" />
-                <span>AI กำลังประมวลผล...</span>
+                <span>AI กำลังประมวลผลผ่าน Dual-Layer Cascade Engine...</span>
               </motion.div>
             )}
           </div>
@@ -719,7 +702,7 @@ const App: React.FC = () => {
             "p-3 lg:p-4 border-t transition-colors",
             isDarkMode ? "border-zinc-800 bg-zinc-950/50" : "border-zinc-200 bg-white"
           )}>
-            {/* Image Attachments Preview */}
+            {/* Image Attachments Preview (6 slots) */}
             <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
               {attachedImages.map((img, idx) => (
                 <div 
@@ -805,7 +788,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar - Generated Images */}
+        {/* Sidebar - Generated Gallery */}
         <aside className={cn(
           "w-full lg:w-80 flex flex-col transition-colors border-l lg:border-l-0",
           isDarkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50/50 border-zinc-200"
@@ -826,7 +809,7 @@ const App: React.FC = () => {
             </span>
           </div>
           
-          <div className="p-5 space-y-5">
+          <div className="p-5 space-y-5 flex-1 overflow-y-auto">
             {generatedImages.length === 0 ? (
               <div className={cn(
                 "h-64 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed rounded-3xl transition-colors",
@@ -888,6 +871,38 @@ const App: React.FC = () => {
           </div>
         </aside>
       </main>
+
+      {/* 6. Dynamic Floating Menu with Live Sync and Regex Short Display */}
+      <FloatingMenu
+        selectedTextModel={selectedTextModel}
+        selectedImageModel={selectedImageModel}
+        onSelectTextModel={setSelectedTextModel}
+        onSelectImageModel={setSelectedImageModel}
+        textModels={textModels}
+        imageModels={imageModels}
+        onOpenLogModal={() => setIsLogModalOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+        isProcessing={isLoading}
+      />
+
+      {/* 7. AI Execution Tracker & Model Transparency Modal */}
+      <ExecutionTrackerModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* 7. Gemini API Key Configuration & Test Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        activeApiKey={activeApiKey}
+        onSaveApiKey={(newKey) => handleSaveApiKey(newKey)}
+        onClearApiKey={handleClearApiKey}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 };

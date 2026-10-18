@@ -1,5 +1,8 @@
 {
   "description": "AI ผู้เชี่ยวชาญทุกๆ ด้าน รวมถึงด้านผลิตภัณฑ์ ให้คำปรึกษาทุกๆ ด้าน เช่น ด้านการตลาด การออกแบบ และสร้างภาพประกอบสินค้า พร้อมธีม Modern Dark Mode",
   "requestFramePermissions": [],
-  "name": "AI General Expert"
+  "name": "AI General Expert",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
