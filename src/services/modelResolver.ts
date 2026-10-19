@@ -34,7 +34,7 @@ const DEPRECATED_MODELS_MAP: Record<string, string> = {
 /**
  * Default Workhorse, High-speed, and Quota-efficient models
  */
-export const STABLE_WORKHORSE_TEXT_MODEL = 'gemini-3.6-flash';
+export const STABLE_WORKHORSE_TEXT_MODEL = 'gemini-3.8-flash';
 export const HIGH_SPEED_TEXT_MODEL = 'gemini-3.8-flash';
 export const QUOTA_EFFICIENT_TEXT_MODEL = 'gemini-3.5-flash-lite';
 

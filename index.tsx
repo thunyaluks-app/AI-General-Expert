@@ -77,11 +77,24 @@ const App: React.FC = () => {
   const [textModels, setTextModels] = useState<AIModel[]>(FALLBACK_TEXT_MODELS);
   const [imageModels, setImageModels] = useState<AIModel[]>(FALLBACK_IMAGE_MODELS);
   const [selectedTextModel, setSelectedTextModel] = useState<string>(() => 
-    getDefaultModelForLevel1(FALLBACK_TEXT_MODELS, 'gemini-3.6-flash')
+    getDefaultModelForLevel1(FALLBACK_TEXT_MODELS, 'gemini-3.8-flash')
   );
   const [selectedImageModel, setSelectedImageModel] = useState<string>(() => 
     getDefaultModelForLevel1(FALLBACK_IMAGE_MODELS, 'gemini-3-pro-image')
   );
+
+  const userHasManuallySelectedTextModel = useRef<boolean>(false);
+  const userHasManuallySelectedImageModel = useRef<boolean>(false);
+
+  const handleSelectTextModel = (modelId: string) => {
+    userHasManuallySelectedTextModel.current = true;
+    setSelectedTextModel(modelId);
+  };
+
+  const handleSelectImageModel = (modelId: string) => {
+    userHasManuallySelectedImageModel.current = true;
+    setSelectedImageModel(modelId);
+  };
 
   // Attached images (up to 6)
   const [attachedImages, setAttachedImages] = useState<(AttachedImage | null)[]>(Array(6).fill(null));
@@ -114,9 +127,19 @@ const App: React.FC = () => {
 
         if (textCategoryList.length > 0) {
           setTextModels(textCategoryList);
+          // Set Level 1 default model according to Centralized AI Models Registry
+          const defaultLevel1Text = getDefaultModelForLevel1(textCategoryList, 'gemini-3.8-flash');
+          if (!userHasManuallySelectedTextModel.current) {
+            setSelectedTextModel(defaultLevel1Text);
+          }
         }
         if (imageCategoryList.length > 0) {
           setImageModels(imageCategoryList);
+          // Set Level 1 default model according to Centralized AI Models Registry
+          const defaultLevel1Image = getDefaultModelForLevel1(imageCategoryList, 'gemini-3-pro-image');
+          if (!userHasManuallySelectedImageModel.current) {
+            setSelectedImageModel(defaultLevel1Image);
+          }
         }
       }
     });
@@ -540,7 +563,7 @@ const App: React.FC = () => {
               )}>Text:</span>
               <select 
                 value={selectedTextModel}
-                onChange={(e) => setSelectedTextModel(e.target.value)}
+                onChange={(e) => handleSelectTextModel(e.target.value)}
                 className={cn(
                   "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
                   isDarkMode ? "text-indigo-400" : "text-indigo-600"
@@ -563,7 +586,7 @@ const App: React.FC = () => {
               )}>Image:</span>
               <select 
                 value={selectedImageModel}
-                onChange={(e) => setSelectedImageModel(e.target.value)}
+                onChange={(e) => handleSelectImageModel(e.target.value)}
                 className={cn(
                   "text-[10px] font-bold bg-transparent border-none focus:ring-0 cursor-pointer p-0 outline-none",
                   isDarkMode ? "text-emerald-400" : "text-emerald-600"
@@ -876,8 +899,8 @@ const App: React.FC = () => {
       <FloatingMenu
         selectedTextModel={selectedTextModel}
         selectedImageModel={selectedImageModel}
-        onSelectTextModel={setSelectedTextModel}
-        onSelectImageModel={setSelectedImageModel}
+        onSelectTextModel={handleSelectTextModel}
+        onSelectImageModel={handleSelectImageModel}
         textModels={textModels}
         imageModels={imageModels}
         onOpenLogModal={() => setIsLogModalOpen(true)}

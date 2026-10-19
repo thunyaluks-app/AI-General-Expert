@@ -29,8 +29,8 @@ export const db = getFirestore(app, "ai-studio-29f335c3-c8ac-451f-97d7-9c310736d
 
 // Default Fallback Models if Firestore connection fails or is loading
 export const FALLBACK_TEXT_MODELS: AIModel[] = [
-  { id: 'gemini-3.6-flash', modelId: 'gemini-3.6-flash', name: '(20)Gemini 3.6 Flash', category: 'text_reasoning', order: 1, isActive: true, isDefaultLevel1: true },
-  { id: 'gemini-3.8-flash', modelId: 'gemini-3.8-flash', name: '(20)Gemini 3.8 Flash (High Speed)', category: 'text_reasoning', order: 2, isActive: true, isDefaultLevel1: false },
+  { id: 'gemini-3.8-flash', modelId: 'gemini-3.8-flash', name: '(20)Gemini 3.8 Flash', category: 'text_reasoning', order: 1, isActive: true, isDefaultLevel1: true },
+  { id: 'gemini-3.6-flash', modelId: 'gemini-3.6-flash', name: '(20)Gemini 3.6 Flash', category: 'text_reasoning', order: 2, isActive: true, isDefaultLevel1: false },
   { id: 'gemini-3.5-flash', modelId: 'gemini-3.5-flash', name: '(20)Gemini 3.5 Flash', category: 'text_reasoning', order: 3, isActive: true, isDefaultLevel1: false },
   { id: 'gemini-3-flash-preview', modelId: 'gemini-3-flash-preview', name: '(20)Gemini 3 Flash Preview', category: 'text_reasoning', order: 4, isActive: true, isDefaultLevel1: false },
   { id: 'gemini-3.5-flash-lite', modelId: 'gemini-3.5-flash-lite', name: '(500)Gemini 3.5 Flash Lite', category: 'text_reasoning', order: 5, isActive: true, isDefaultLevel1: false },
